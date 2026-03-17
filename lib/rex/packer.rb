@@ -1,17 +1,12 @@
 # frozen_string_literal: true
 
+require "bundler"
 require "open3"
 require "fileutils"
 require "rbconfig"
 
 module Rex
   class Packer
-    BUNDLER_STEP_ARGS = [
-      %w[install --deployment --without development test],
-      %w[cache --all --all-platforms],
-      %w[binstubs --all --standalone]
-    ].freeze
-
     def initialize(directory, entry: nil, output: nil, name: nil, verbose: false)
       @directory = directory
       @name      = name   || File.basename(directory)
@@ -50,17 +45,17 @@ module Rex
     end
 
     def run_bundler_steps
-      # Always set path first so any install step uses the local vendor/bundle
-      log "Running: bundle config set path vendor/bundle"
-      run_command!([RbConfig.ruby, bundle_bin, "config", "set", "path", "vendor/bundle"])
+      run_bundler_command!(%w[config set path vendor/bundle])
+      run_bundler_command!(%w[config set deployment true])
+      run_bundler_command!(%w[config set without development:test])
 
       ensure_lockfile!
 
-      BUNDLER_STEP_ARGS.each do |args|
-        cmd = [RbConfig.ruby, bundle_bin, *args]
-        log "Running: bundle #{args.join(' ')}"
-        run_command!(cmd)
-      end
+      run_bundler_command!(%w[install])
+      run_bundler_command!(%w[config set cache_all true])
+      run_bundler_command!(%w[config set cache_all_platforms true])
+      run_bundler_command!(%w[cache])
+      run_bundler_command!(%w[binstubs --all --standalone])
     end
 
     def ensure_lockfile!
@@ -68,7 +63,13 @@ module Rex
       return if File.exist?(lockfile)
 
       log "No Gemfile.lock found — running bundle install to generate one"
-      run_command!([RbConfig.ruby, bundle_bin, "install"])
+      run_bundler_command!(%w[install])
+    end
+
+    def run_bundler_command!(args)
+      cmd = [RbConfig.ruby, bundle_bin, *args]
+      log "Running: bundle #{args.join(' ')}"
+      Bundler.with_unbundled_env { run_command!(cmd) }
     end
 
     def run_command!(cmd)
