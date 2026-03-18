@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+require "rbag"
+
 require "minitest/autorun"
 require "tmpdir"
 require "fileutils"
-
-$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
-require "rex"
+require "open3"
+require "benchmark"

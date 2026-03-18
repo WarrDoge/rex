@@ -3,18 +3,21 @@
 require "rake/clean"
 require "rake/testtask"
 
+ENV["BUNDLE_PATH"] ||= "vendor/bundle"
+
 # Ensure vendored dev gems (minitest, rubocop) are available
 vendor_lib = File.expand_path("vendor/bundle/ruby/#{RUBY_VERSION.sub(/\.\d+$/, '.0')}/gems")
 if Dir.exist?(vendor_lib)
   Dir.glob("#{vendor_lib}/*/lib").each { |p| $LOAD_PATH.unshift(p) unless $LOAD_PATH.include?(p) }
 end
 
-CLEAN.include("*.rex", "pkg/")
+CLEAN.include("*.rbag", "*.gem", "pkg/")
 
 # --- test ---
 
 Rake::TestTask.new(:test) do |t|
   t.libs << "lib"
+  t.libs << "test"
   t.pattern = "test/test_*.rb"
   t.verbose = false
 end
@@ -43,14 +46,14 @@ end
 
 # --- build / install ---
 
-desc "Build the rex gem"
+desc "Build the rbag gem"
 task :build do
-  sh "gem build rex.gemspec"
+  sh "gem build rbag.gemspec"
 end
 
-desc "Install rex locally"
+desc "Install rbag locally"
 task install: :build do
-  gem_file = Dir["rex-*.gem"].max_by { |f| File.mtime(f) }
+  gem_file = Dir["rbag-*.gem"].max_by { |f| File.mtime(f) }
   sh "gem install #{gem_file}"
 end
 
@@ -58,5 +61,5 @@ task default: :test
 
 def bundle_exec(cmd)
   bundle = "#{RbConfig.ruby} #{Gem.bin_path('bundler', 'bundle')}"
-  "BUNDLE_PATH=vendor/bundle #{bundle} exec #{cmd}"
+  "#{bundle} exec #{cmd}"
 end

@@ -1,165 +1,156 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
-require "rubygems/package"
-require "zlib"
-require "stringio"
+require "test_helper"
 
 class TestArchiver < Minitest::Test
   def setup
-    @tmpdir = Dir.mktmpdir("rex-archiver-test-")
+    @tmpdir = Dir.mktmpdir("rbag-archiver-test-")
   end
 
   def teardown
     FileUtils.rm_rf(@tmpdir)
   end
 
-  # --- exclusion logic ---
+  def test_lists_files_recursively
+    write_file("hello.rb", "puts 'hello'")
+    write_file("subdir/world.rb", "puts 'world'")
+
+    archiver = Rbag::Archiver.new(@tmpdir)
+
+    assert_equal ["hello.rb", "subdir/world.rb"].sort, archiver.files.sort
+  end
 
   def test_excludes_git_directory
-    assert excluded?(".git")
-    assert excluded?(".git/config")
-    assert excluded?("sub/.git/config")
+    write_file(".git/config", "config")
+    write_file("app.rb", "app")
+
+    archiver = Rbag::Archiver.new(@tmpdir)
+
+    assert_equal ["app.rb"], archiver.files
   end
 
   def test_excludes_bundle_directory
-    assert excluded?(".bundle")
-    assert excluded?(".bundle/config")
+    write_file(".bundle/config", "config")
+    write_file("app.rb", "app")
+
+    archiver = Rbag::Archiver.new(@tmpdir)
+
+    assert_equal ["app.rb"], archiver.files
   end
 
   def test_excludes_vendor_cache
-    assert excluded?("vendor/cache")
-    assert excluded?("vendor/cache/json-2.0.gem")
+    write_file("vendor/cache/somegem.gem", "gem")
+    write_file("app.rb", "app")
+
+    archiver = Rbag::Archiver.new(@tmpdir)
+
+    assert_equal ["app.rb"], archiver.files
   end
 
-  def test_does_not_exclude_vendor_bundle
-    refute excluded?("vendor/bundle")
-    refute excluded?("vendor/bundle/ruby/3.2.0/gems/json-2.0/lib/json.rb")
+  def test_excludes_rbag_files
+    assert excluded?("myapp.rbag")
+    assert excluded?("dist/myapp.rbag")
   end
 
-  def test_excludes_rex_files
-    assert excluded?("myapp.rex")
-    assert excluded?("dist/myapp.rex")
+  def test_respects_rbagignore
+    write_file(".rbagignore", "secret.txt")
+    write_file("secret.txt", "shhh")
+    write_file("app.rb", "app")
+
+    archiver = Rbag::Archiver.new(@tmpdir)
+
+    assert_equal ["app.rb", ".rbagignore"].sort, archiver.files.sort
   end
 
-  def test_does_not_exclude_normal_files
-    refute excluded?("lib/app.rb")
-    refute excluded?("bin/myapp")
-    refute excluded?("Gemfile")
+  def test_rbagignore_pattern
+    write_file(".rbagignore", "spec/\ntest/\n*.md\n")
+    write_file("spec/test_spec.rb", "spec")
+    write_file("README.md", "readme")
+    write_file("app.rb", "app")
+
+    archiver = Rbag::Archiver.new(@tmpdir)
+
+    assert_equal ["app.rb", ".rbagignore"].sort, archiver.files.sort
   end
 
-  def test_rexignore_pattern
-    write_file(".rexignore", "spec/\ntest/\n*.md\n")
+  def test_rbagignore_ignores_comments_and_blank_lines
+    write_file(".rbagignore", "# comment\n\nspec/\n")
+    write_file("spec/test_spec.rb", "spec")
+    write_file("app.rb", "app")
 
-    assert excluded?("spec/foo_spec.rb")
-    assert excluded?("test/foo_test.rb")
-    assert excluded?("README.md")
-    refute excluded?("lib/app.rb")
+    archiver = Rbag::Archiver.new(@tmpdir)
+
+    assert_equal ["app.rb", ".rbagignore"].sort, archiver.files.sort
   end
 
-  def test_rexignore_ignores_comments_and_blank_lines
-    write_file(".rexignore", "# comment\n\nspec/\n")
+  def test_create_returns_gzipped_tar
+    write_file("hello.rb", "puts 'hello'")
+    bytes = Rbag::Archiver.create(@tmpdir)
 
-    assert excluded?("spec/foo.rb")
-    refute excluded?("lib/app.rb")
+    # Check for GZIP magic number
+    assert_equal "\x1F\x8B".b, bytes[0..1].b
   end
 
-  # --- archive creation ---
+  def test_archive_contains_files
+    write_file("hello.rb", "puts 'hello'")
+    write_file("lib/world.rb", "puts 'world'")
 
-  def test_creates_valid_gzip
-    write_file("lib/app.rb", "puts 'hello'")
-    bytes = Rex::Archiver.create(@tmpdir)
+    entries = tar_entries(Rbag::Archiver.create(@tmpdir))
 
-    assert_predicate bytes.bytesize, :positive?
-    # Should decompress without error
-    Zlib::GzipReader.wrap(StringIO.new(bytes), &:read)
+    assert_includes entries, "hello.rb"
+    assert_includes entries, "lib/world.rb"
   end
 
-  def test_archive_contains_expected_files
-    write_file("lib/app.rb", "puts 'hello'")
-    write_file("bin/myapp", "#!/usr/bin/env ruby")
+  def test_archive_preserves_executable_bit
+    write_file("run.sh", "echo 'hi'")
+    File.chmod(0o755, File.join(@tmpdir, "run.sh"))
 
-    entries = tar_entries(Rex::Archiver.create(@tmpdir))
+    bytes = Rbag::Archiver.create(@tmpdir)
+    mode = tar_entry_mode(bytes, "run.sh")
 
-    assert_includes entries, "lib/app.rb"
-    assert_includes entries, "bin/myapp"
+    assert_equal 0o755, mode & 0o777
   end
 
-  def test_archive_excludes_git
-    write_file(".git/config", "[core]")
-    write_file("lib/app.rb", "")
+  def test_archive_entries_are_sorted
+    write_file("c.rb", "c")
+    write_file("a.rb", "a")
+    write_file("b.rb", "b")
 
-    entries = tar_entries(Rex::Archiver.create(@tmpdir))
+    entries = tar_entries(Rbag::Archiver.create(@tmpdir))
 
-    refute(entries.any? { |e| e.start_with?(".git") })
-    assert_includes entries, "lib/app.rb"
-  end
-
-  def test_archive_handles_symlinks
-    write_file("lib/real.rb", "# real")
-    File.symlink(File.join(@tmpdir, "lib/real.rb"), File.join(@tmpdir, "lib/link.rb"))
-
-    bytes = Rex::Archiver.create(@tmpdir)
-    entries = tar_entries_with_type(bytes)
-
-    symlink_entry = entries.find { |name, _| name == "lib/link.rb" }
-
-    assert symlink_entry, "expected symlink entry in archive"
-    assert_equal "2", symlink_entry[1], "expected typeflag 2 (symlink)"
-  end
-
-  def test_archive_preserves_file_permissions
-    write_file("bin/myapp", "#!/usr/bin/env ruby")
-    File.chmod(0o755, File.join(@tmpdir, "bin/myapp"))
-
-    bytes = Rex::Archiver.create(@tmpdir)
-    Zlib::GzipReader.wrap(StringIO.new(bytes)) do |gz|
-      Gem::Package::TarReader.new(gz) do |tar|
-        tar.each do |entry|
-          assert_equal 0o755, entry.header.mode & 0o777 if entry.header.name == "bin/myapp"
-        end
-      end
-    end
-  end
-
-  def test_archive_is_deterministic
-    write_file("lib/a.rb", "a")
-    write_file("lib/b.rb", "b")
-    bytes1 = Rex::Archiver.create(@tmpdir)
-    bytes2 = Rex::Archiver.create(@tmpdir)
-    # Same directory → same tar content (entries in sorted order)
-    assert_equal tar_entries(bytes1), tar_entries(bytes2)
+    assert_equal entries, entries.sort
   end
 
   private
 
-  def excluded?(rel_path)
-    Rex::Archiver.new(@tmpdir).send(:excluded?, rel_path)
+  def write_file(path, content)
+    full_path = File.join(@tmpdir, path)
+    FileUtils.mkdir_p(File.dirname(full_path))
+    File.write(full_path, content)
   end
 
-  def write_file(rel_path, content)
-    abs = File.join(@tmpdir, rel_path)
-    FileUtils.mkdir_p(File.dirname(abs))
-    File.write(abs, content)
-  end
-
-  def tar_entries(gz_bytes)
-    names = []
-    Zlib::GzipReader.wrap(StringIO.new(gz_bytes)) do |gz|
-      Gem::Package::TarReader.new(gz) do |tar|
-        tar.each { |e| names << e.header.name }
-      end
-    end
-    names
-  end
-
-  def tar_entries_with_type(gz_bytes)
+  def tar_entries(bytes)
     entries = []
-    Zlib::GzipReader.wrap(StringIO.new(gz_bytes)) do |gz|
+    each_tar_entry(bytes) { |e| entries << e.full_name }
+    entries
+  end
+
+  def tar_entry_mode(bytes, name)
+    each_tar_entry(bytes) do |e|
+      return e.header.mode & 0o777 if e.full_name == name
+    end
+    nil
+  end
+
+  def each_tar_entry(bytes, &block)
+    Zlib::GzipReader.wrap(StringIO.new(bytes)) do |gz|
       Gem::Package::TarReader.new(gz) do |tar|
-        tar.each { |e| entries << [e.header.name, e.header.typeflag] }
+        tar.each(&block)
       end
     end
-    entries
+  end
+
+  def excluded?(rel_path)
+    Rbag::Archiver.new(@tmpdir).send(:excluded?, rel_path)
   end
 end

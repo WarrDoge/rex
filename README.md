@@ -1,13 +1,13 @@
-# rex
+# rbag
 
-PEX for Ruby. Pack a Ruby application and all its gem dependencies into a single self-executing `.rex` file.
+PEX for Ruby. Pack a Ruby application and all its gem dependencies into a single self-executing `.rbag` file.
 
 ## How it works
 
-`rex pack` vendors your gems with Bundler, creates standalone binstubs (no Bundler required at runtime), archives the whole thing as a gzipped tar, and embeds it into a Ruby script. The output is a single `.rex` file that self-extracts to `/tmp/` on first run and then executes your app directly.
+`rbag pack` vendors your gems with Bundler, creates standalone binstubs (no Bundler required at runtime), archives the whole thing as a gzipped tar, and embeds it into a Ruby script. The output is a single `.rbag` file that self-extracts to `/tmp/` on first run and then executes your app directly.
 
 ```
-myapp/                         →    myapp.rex
+myapp/                         →    myapp.rbag
   Gemfile                           (598 KB, single file)
   bin/myapp
   lib/
@@ -19,14 +19,14 @@ The target host only needs Ruby — no Bundler, no gems.
 ## Installation
 
 ```sh
-gem install rex
+gem install rbag
 ```
 
 Or from source:
 
 ```sh
-git clone https://github.com/WarrDoge/rex
-cd rex
+git clone https://github.com/WarrDoge/rbag
+cd rbag
 rake install
 ```
 
@@ -34,20 +34,20 @@ rake install
 
 ```sh
 # Pack the app in the current directory
-rex pack
+rbag pack
 
 # Pack a specific directory
-rex pack ./myapp
+rbag pack ./myapp
 
 # Specify options explicitly
-rex pack -n myapp -e myapp -o dist/myapp.rex ./myapp
+rbag pack -n myapp -e myapp -o dist/myapp.rbag ./myapp
 ```
 
 ### Options
 
 ```
 -e, --entry ENTRY    Entry point binstub name (default: first file in bin/)
--o, --output FILE    Output file (default: <name>.rex in cwd)
+-o, --output FILE    Output file (default: <name>.rbag in cwd)
 -n, --name NAME      App name (default: directory basename)
 -v, --verbose        Stream bundler output
 ```
@@ -56,17 +56,17 @@ rex pack -n myapp -e myapp -o dist/myapp.rex ./myapp
 
 ```sh
 # With explicit interpreter
-ruby myapp.rex
+ruby myapp.rbag
 
 # As an executable (uses #!/usr/bin/env ruby shebang)
-chmod +x myapp.rex
-./myapp.rex
+chmod +x myapp.rbag
+./myapp.rbag
 
 # Pass arguments normally
-./myapp.rex --config prod.yml serve
+./myapp.rbag --config prod.yml serve
 ```
 
-On the first run, the app extracts to `/tmp/rex-<name>-<checksum>/`. Subsequent runs skip extraction and start in ~150ms.
+On the first run, the app extracts to `/tmp/rbag-<name>-<checksum>/`. Subsequent runs skip extraction and start in ~150ms.
 
 ## Pack sequence
 
@@ -74,12 +74,12 @@ On the first run, the app extracts to `/tmp/rex-<name>-<checksum>/`. Subsequent 
 2. `bundle install --deployment` (generates `Gemfile.lock` first if absent)
 3. `bundle cache --all --all-platforms`
 4. `bundle binstubs --all --standalone`
-5. Archive app directory as tar.gz (excludes `.git/`, `vendor/cache/`, `*.rex`)
+5. Archive app directory as tar.gz (excludes `.git/`, `vendor/cache/`, `*.rbag`)
 6. Embed archive as base64 in a self-extracting Ruby script
 
 ## Excluding files
 
-Create a `.rexignore` file in your app root. Same format as `.gitignore` (one fnmatch pattern per line):
+Create a `.rbagignore` file in your app root. Same format as `.gitignore` (one fnmatch pattern per line):
 
 ```
 spec/
@@ -91,7 +91,7 @@ tmp/
 .env
 ```
 
-The following are always excluded regardless of `.rexignore`: `.git/`, `.bundle/`, `vendor/cache/`, `*.rex`.
+The following are always excluded regardless of `.rbagignore`: `.git/`, `.bundle/`, `vendor/cache/`, `*.rbag`.
 
 ## Requirements
 

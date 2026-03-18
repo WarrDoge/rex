@@ -9,24 +9,24 @@ require "open3"
 class TestIntegration < Minitest::Test
   def setup
     skip "Set SKIP_INTEGRATION=0 to run integration tests" if ENV.fetch("SKIP_INTEGRATION", "1") == "1"
-    @tmpdir = Dir.mktmpdir("rex-integration-")
+    @tmpdir = Dir.mktmpdir("rbag-integration-")
     build_test_app
   end
 
   def teardown
     FileUtils.rm_rf(@tmpdir) if @tmpdir
     # Clean up extracted tmp dirs from this test run
-    Dir.glob("/tmp/rex-rextest-*").each { |d| FileUtils.rm_rf(d) }
+    Dir.glob("/tmp/rbag-rbagtest-*").each { |d| FileUtils.rm_rf(d) }
   end
 
   def test_packs_and_executes
-    out_rex = File.join(@tmpdir, "rextest.rex")
-    Rex::Packer.new(app_dir, name: "rextest", entry: "hello", output: out_rex).pack
+    out_rbag = File.join(@tmpdir, "rbagtest.rbag")
+    Rbag::Packer.new(app_dir, name: "rbagtest", entry: "hello", output: out_rbag).pack
 
-    assert_path_exists out_rex, "expected .rex file to be created"
-    assert File.executable?(out_rex), "expected .rex file to be executable"
+    assert_path_exists out_rbag, "expected .rbag file to be created"
+    assert File.executable?(out_rbag), "expected .rbag file to be executable"
 
-    output = `#{RbConfig.ruby} #{out_rex} --hello world 2>&1`.chomp
+    output = `#{RbConfig.ruby} #{out_rbag} --hello world 2>&1`.chomp
     result = JSON.parse(output)
 
     assert result["ok"]
@@ -34,33 +34,33 @@ class TestIntegration < Minitest::Test
   end
 
   def test_second_run_skips_extraction
-    out_rex = File.join(@tmpdir, "rextest.rex")
-    Rex::Packer.new(app_dir, name: "rextest", entry: "hello", output: out_rex).pack
+    out_rbag = File.join(@tmpdir, "rbagtest.rbag")
+    Rbag::Packer.new(app_dir, name: "rbagtest", entry: "hello", output: out_rbag).pack
 
     # First run: extracts
-    system(RbConfig.ruby, out_rex, out: File::NULL, err: File::NULL)
+    system(RbConfig.ruby, out_rbag, out: File::NULL, err: File::NULL)
 
     # Second run: should be fast (no extraction)
-    elapsed = Benchmark.realtime { system(RbConfig.ruby, out_rex, out: File::NULL, err: File::NULL) }
+    elapsed = Benchmark.realtime { system(RbConfig.ruby, out_rbag, out: File::NULL, err: File::NULL) }
 
     assert_operator elapsed, :<, 5.0, "second run took #{elapsed.round(2)}s — expected < 5s"
   end
 
   def test_argv_forwarding
-    out_rex = File.join(@tmpdir, "rextest.rex")
-    Rex::Packer.new(app_dir, name: "rextest", entry: "hello", output: out_rex).pack
+    out_rbag = File.join(@tmpdir, "rbagtest.rbag")
+    Rbag::Packer.new(app_dir, name: "rbagtest", entry: "hello", output: out_rbag).pack
 
-    output, = Open3.capture2(RbConfig.ruby, out_rex, "foo", "bar baz")
+    output, = Open3.capture2(RbConfig.ruby, out_rbag, "foo", "bar baz")
     result = JSON.parse(output)
 
     assert_equal ["foo", "bar baz"], result["args"]
   end
 
-  def test_rex_file_has_shebang
-    out_rex = File.join(@tmpdir, "rextest.rex")
-    Rex::Packer.new(app_dir, name: "rextest", entry: "hello", output: out_rex).pack
+  def test_rbag_file_has_shebang
+    out_rbag = File.join(@tmpdir, "rbagtest.rbag")
+    Rbag::Packer.new(app_dir, name: "rbagtest", entry: "hello", output: out_rbag).pack
 
-    first_line = File.open(out_rex, &:readline).chomp
+    first_line = File.open(out_rbag, &:readline).chomp
 
     assert_equal "#!/usr/bin/env ruby", first_line
   end

@@ -1,7 +1,8 @@
 PATH
   remote: .
   specs:
-    rex (0.1.0)
+    rbag (0.1.0)
+      bundler
 
 GEM
   remote: https://rubygems.org/
@@ -58,7 +59,7 @@ PLATFORMS
 
 DEPENDENCIES
   minitest (~> 5.0)
-  rex!
+  rbag!
   rubocop (~> 1.0)
   rubocop-minitest (~> 0.35)
 
@@ -78,8 +79,8 @@ CHECKSUMS
   public_suffix (7.0.5) sha256=1a8bb08f1bbea19228d3bed6e5ed908d1cb4f7c2726d18bd9cadf60bc676f623
   racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
   rainbow (3.1.1) sha256=039491aa3a89f42efa1d6dec2fc4e62ede96eb6acd95e52f1ad581182b79bc6a
+  rbag (0.1.0)
   regexp_parser (2.11.3) sha256=ca13f381a173b7a93450e53459075c9b76a10433caadcb2f1180f2c741fc55a4
-  rex (0.1.0)
   rubocop (1.85.1) sha256=3dbcf9e961baa4c376eeeb2a03913dca5e3987033b04d38fa538aa1e7406cc77
   rubocop-ast (1.49.1) sha256=4412f3ee70f6fe4546cc489548e0f6fcf76cafcfa80fa03af67098ffed755035
   rubocop-minitest (0.39.1) sha256=998398d6da4026d297f0f9bf709a1eac5f2b6947c24431f94af08138510cf7ed
